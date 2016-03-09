@@ -31,8 +31,8 @@ void gsl_spline_wrapper(double *x, double *y, int nx, double *xx, double *yy, in
 
 void interpolate_covariance(double *ra, double *dec, int n, double *costheta, double *corr, int npt, double *mat)
 {
-  printf("first element was %12.5g %12.5g %12.5g\n",mat[0],corr[0],corr[npt-1]);
-  printf("limits are %12.5g %12.5g\n",costheta[0],costheta[npt-1]);
+  //printf("first element was %12.5g %12.5g %12.5g\n",mat[0],corr[0],corr[npt-1]);
+  //printf("limits are %12.5g %12.5g\n",costheta[0],costheta[npt-1]);
 
 
 
@@ -202,7 +202,34 @@ void fill_gamma_alpha(double *ra, double *dec, int n, double *cosalpha, double *
 }
 
 /*--------------------------------------------------------------------------------*/
-void fill_QU_corr_ee(double *corr1, double *corr2, double *alpha, double *gamma, int npt, double *corrQQ, double *corrQU, double *corrUQ, double *corrUU)
+void fill_QU_corr_eb(double *corr1E, double *corr2E, double *corr1B, double *corr2B, double *alpha, double *gamma, int npt, double *corrE, double *corrB)
+{
+#pragma omp parallel for
+  for (int i=0;i<npt;i++) 
+    for (int j=0;j<npt;j++) {
+      double c1=cos(-2*(alpha[i*npt+j]+gamma[i*npt+j]));
+      double c2=cos(2*(gamma[i*npt+j]-alpha[i*npt+j]));
+      
+      corrE[4*i*npt+2*j]=0.5*(c1*corr1E[i*npt+j]+c2*corr2E[i*npt+j]);
+      corrE[(4*i+2)*npt+2*j+1]=0.5*(c1*corr1E[i*npt+j]-c2*corr2E[i*npt+j]);
+
+      corrB[4*i*npt+2*j]=0.5*(c1*corr1B[i*npt+j]+c2*corr2B[i*npt+j]);
+      corrB[(4*i+2)*npt+2*j+1]=0.5*(c1*corr1B[i*npt+j]-c2*corr2B[i*npt+j]);
+
+      c1=sin(-2*(alpha[i*npt+j]+gamma[i*npt+j]));
+      c2=sin(2*(gamma[i*npt+j]-alpha[i*npt+j]));
+      
+      corrE[4*i*npt+2*j+1]=0.5*(c1*corr1E[i*npt+j]+c2*corr2E[i*npt+j]);
+      corrE[(4*i+2)*npt+2*j]=0.5*(-c1*corr1E[i*npt+j]+c2*corr2E[i*npt+j]);
+      
+      corrB[4*i*npt+2*j+1]=0.5*(c1*corr1B[i*npt+j]+c2*corr2B[i*npt+j]);
+      corrB[(4*i+2)*npt+2*j]=0.5*(-c1*corr1B[i*npt+j]+c2*corr2B[i*npt+j]);
+      
+  }
+}
+
+/*--------------------------------------------------------------------------------*/
+void fill_QU_corr_ee_old(double *corr1, double *corr2, double *alpha, double *gamma, int npt, double *corrQQ, double *corrQU, double *corrUQ, double *corrUU)
 {
 #pragma omp parallel for
   for (int i=0;i<npt;i++) {

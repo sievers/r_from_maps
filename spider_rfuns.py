@@ -12,20 +12,31 @@ interpolate_covariance_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,
 fill_gamma_alpha_c=mylib.fill_gamma_alpha
 fill_gamma_alpha_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
 
-fill_QU_corr_ee_c=mylib.fill_QU_corr_ee
-fill_QU_corr_ee_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
+fill_QU_corr_ee_old_c=mylib.fill_QU_corr_ee_old
+fill_QU_corr_ee_old_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p]
 
-
+fill_QU_corr_eb_c=mylib.fill_QU_corr_eb
+fill_QU_corr_eb_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
 
 #void interpolate_covariance(double *ra, double *dec, int n, double *costheta, double *corr, int npt, double *mat)
+def fill_QUcorr_eb(corr1E,corr2E,corr1B,corr2B,alpha,gamma):
 
-def fill_QUcorr_ee(corr1,corr2,alpha,gamma):
+
+    nn=corr1E.shape[0]
+
+    corrE=numpy.zeros([2*nn,2*nn])
+    corrB=numpy.zeros([2*nn,2*nn])
+
+    fill_QU_corr_eb_c(corr1E.ctypes.data,corr2E.ctypes.data,corr1B.ctypes.data,corr2B.ctypes.data,alpha.ctypes.data,gamma.ctypes.data,nn,corrE.ctypes.data,corrB.ctypes.data)
+    return corrE,corrB
+                      
+def fill_QUcorr_ee_old(corr1,corr2,alpha,gamma):
     if (True):
         corrQQ=numpy.zeros(corr1.shape)
         corrQU=numpy.zeros(corr1.shape)
         corrUQ=numpy.zeros(corr1.shape)
         corrUU=numpy.zeros(corr1.shape)
-        fill_QU_corr_ee_c(corr1.ctypes.data,corr2.ctypes.data,alpha.ctypes.data,gamma.ctypes.data,corr1.size,corrQQ.ctypes.data,corrQU.ctypes.data,corrUQ.ctypes.data,corrUU.ctypes.data)
+        fill_QU_corr_ee_old_c(corr1.ctypes.data,corr2.ctypes.data,alpha.ctypes.data,gamma.ctypes.data,corr1.size,corrQQ.ctypes.data,corrQU.ctypes.data,corrUQ.ctypes.data,corrUU.ctypes.data)
     else:
         c1=corr1*numpy.cos(-2*(alpha+gamma))
         c2=corr2*numpy.cos(2*(gamma-alpha))
@@ -65,6 +76,69 @@ def spec2corr(pspec,x):
 
 
 def get_EB_corrs(ra,dec,psE,psB):
+    aa_start=time.time()
+    aa=time.time()
+    alpha,gamma=fill_gamma_alpha(ra,dec);
+    bb=time.time();
+    #print 'elapsed time to fill gamma and alpha is ' + repr(bb-aa)
+    ninterp=5000;
+    costh=1.0*numpy.arange(ninterp)
+    costh=costh-numpy.mean(costh)
+    costh=costh/max(costh)
+    costh[0]=numpy.round(costh[0])
+    costh[-1]=numpy.round(costh[-1])
+    
+    corr1E_vec=0*costh
+    corr2E_vec=0*costh
+
+    corr1B_vec=0*costh
+    corr2B_vec=0*costh
+
+    aa=time.time()
+    for i in range(len(psE)):
+        l=i+2
+        fac=numpy.sqrt((2*l+1)/(4*numpy.pi))
+        tmp=fac*harmonics.sYlm(2,l,-2,numpy.arccos(costh),0*costh)
+        corr1E_vec=corr1E_vec+tmp.real*psE[i]
+        corr1B_vec=corr1B_vec+tmp.real*psB[i]
+
+        tmp=fac*harmonics.sYlm(2,l,2,numpy.arccos(costh),0*costh)#*(psE[i]-psB[i])
+        corr2E_vec=corr2E_vec+tmp.real*psE[i]
+        corr2B_vec=corr2B_vec-tmp.real*psB[i]
+        #if (psE[i]>0):
+        #    print "ell is " + repr(l)
+
+    bb=time.time()
+    #print 'elapsed time is to calculate correlation is ' + repr(bb-aa)
+
+    nn=len(ra)
+
+
+    aa=time.time()
+    corr1=numpy.zeros([nn,nn])
+    corr2=numpy.zeros([nn,nn])
+    corr1E=interpolate_covariance(ra,dec,(costh),corr1E_vec.real)
+    corr2E=interpolate_covariance(ra,dec,(costh),corr2E_vec.real)
+
+    corr1B=interpolate_covariance(ra,dec,(costh),corr1B_vec.real)
+    corr2B=interpolate_covariance(ra,dec,(costh),corr2B_vec.real)
+    bb=time.time()
+    #print 'elapsed time to interpolate correlation is ' + repr(bb-aa)
+
+
+    aa=time.time()
+
+    corrE,corrB=fill_QUcorr_eb(corr1E,corr2E,corr1B,corr2B,alpha,gamma)
+
+    bb=time.time()
+    #print 'elapsed time to form Q/U is ' + repr(bb-aa)
+    bb_stop=time.time()
+    print 'total elapsed time to form E/B covariances is ' + repr(bb_stop-aa_start)
+    return corrE,corrB
+
+
+
+def get_EB_corrs_old(ra,dec,psE,psB):
     aa_start=time.time()
     aa=time.time()
     alpha,gamma=fill_gamma_alpha(ra,dec);
@@ -111,17 +185,7 @@ def get_EB_corrs(ra,dec,psE,psB):
 
     aa=time.time()
     if (True):
-        #c1=corr1*numpy.cos(-2*(alpha+gamma))
-        #c2=corr2*numpy.cos(2*(gamma-alpha))
-        #corrQQ=0.5*(c1+c2)
-        #corrUU=0.5*(c1-c2)
-
-        #c1=corr1*numpy.sin(-2*(alpha+gamma))
-        #c2=corr2*numpy.sin(2*(gamma-alpha))
-        
-        #corrQU=0.5*(c2-c1)
-        #corrUQ=0.5*(c2+c1)
-        corrQQ,corrUU,corrQU,corrUQ=fill_QUcorr_ee(corr1,corr2,alpha,gamma)
+        corrQQ,corrUU,corrQU,corrUQ=fill_QUcorr_ee_old(corr1,corr2,alpha,gamma)
     else:
         corr1=corr1*numpy.exp(-2*I*(alpha+gamma))
         corr2=corr2*numpy.exp(2*I*(gamma-alpha))
