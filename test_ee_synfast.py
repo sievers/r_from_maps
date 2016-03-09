@@ -7,7 +7,7 @@ import time
 plt.ion()
 
 
-nside=16;
+nside=32;
 
 
 lmax=20;

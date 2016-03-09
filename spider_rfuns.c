@@ -7,6 +7,7 @@
 
 
 //gcc-4.9 -I/Users/sievers/local/include -fopenmp -O3 -shared -fPIC -std=c99 -o libspider_rfuns.so spider_rfuns.c -L/Users/sievers/local/lib -lgsl -lm -lgomp
+//gcc -I${HIPPO_GSL_DIR}/include -fopenmp -O3 -shared -fPIC -std=c99 -o libspider_rfuns.so spider_rfuns.c -L${HIPPO_GSL_DIR}/lib -lgsl -L${HIPPO_CBLAS_DIR}/lib -lcblas -L${HIPPO_OPENBLAS_DIR}/lib -lopenblas -lm -lgomp
 
 void gsl_spline_wrapper(double *x, double *y, int nx, double *xx, double *yy, int nxx)
 {
@@ -150,6 +151,9 @@ void fill_gamma_alpha(double *ra, double *dec, int n, double *cosalpha, double *
     sindec[i]=sin(dec[i]);
   }
   //  double pi=3.1415926535897;
+#ifndef M_PI
+#define M_PI 3.14159265358979
+#endif
   double pi=M_PI;
   double twopi=2*pi;
 #pragma omp parallel for
