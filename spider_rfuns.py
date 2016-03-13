@@ -35,8 +35,8 @@ def get_EB_corrs_fast(x,psE,psB):
     Ecorr=0*x
     Bcorr=0*x
     nx=x.size
-    nl=psE.size
-    get_EB_corrs_c(x.ctypes.data,nx,psE.ctypes.data,psB.ctypes.data,nl,Ecorr.ctypes.data,Bcorr.ctypes.data)
+    lmax=psE.size-1
+    get_EB_corrs_c(x.ctypes.data,nx,psE.ctypes.data,psB.ctypes.data,lmax,Ecorr.ctypes.data,Bcorr.ctypes.data)
 
     return Ecorr,Bcorr
 
@@ -78,7 +78,8 @@ def sYlm(ss,ll,mm,costheta,phi=0):
         m*=-1
         if ((m+s)%2):
             Pm *=-1
-    print 'Pm is ' + repr(Pm)
+    #print 'Pm is ' + repr(Pm)
+    #print 's,l,m are ' + repr([s,l,m])
     result=Pm*s_lambda_lm(s,l,m,costheta)
     I=numpy.complex(0,1)
     if (mylen(phi)==1):

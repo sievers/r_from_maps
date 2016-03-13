@@ -359,48 +359,97 @@ void get_EB_corrs(double *x, int nx, double *psE, double *psB, int nell, double 
   int m=2;
   double fac=myfactorial(2*m+1)/(4.0*M_PI*myfactorial(m+s)*myfactorial(m-s));
   fac=sqrt(fac);
+  //for (int i=0;i<55;i++)
+  //printf("ps %3d is %12.4g\n",i,psE[i]);
 #pragma omp parallel for
   for (int i=0;i<nx;i++) {
-    double Pm=0.25;
+
+    //double Pm=0.25;
+    double Pm=pow(-0.5,m);
     if (m!=s) 
       Pm*=pow(1.0+x[i],(m-s)*(0.5));
     if (m!= -s)    
       Pm *= pow(1.0-x[i],(m+s)*0.5);
     Pm *=fac;
+    
+
+
+    //do quadrupole
+    double tmp2=Pm*sqrt((2*2+1)/(4*M_PI));
+    Ecorr[i]+=tmp2*psE[2];
+    Bcorr[i]-=tmp2*psB[2];
+
+    //do ell=3
     double mycslm_old=Cslm(s,m+1,m);
     double Pm1=(x[i]+s/(m+1.0))*mycslm_old*Pm;
+
+    double tmp3=Pm1*sqrt((2*3+1)/(4*M_PI));
+    Ecorr[i]+=tmp3*psE[3];
+    Bcorr[i]-=tmp3*psB[3];
+
+    if (i==0)
+      printf("Pm and Pm1 in get_EB_corrs are %12.5g %12.5g\n",Pm,Pm1);
+    
     for (int n=m+2;n<nell+1;n++) {
       double mycslm=Cslm(s,n,m);
       double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1-Pm/mycslm_old);
       mycslm_old=mycslm;
-      double tmp=Pm*sqrt((2*n+1)/(4*M_PI));
+      double tmp=Pn*sqrt((2*n+1)/(4*M_PI));
+      Pm=Pm1;
+      Pm1=Pn;
+      //if (n==50) 
+      //Ecorr[i]=tmp;
       Ecorr[i]+=tmp*psE[n];
       Bcorr[i]-=tmp*psB[n];
+
     }
   }
-  
+  printf("Ecorr[0]=%12.4g\n",Ecorr[0]);
+
   //do 2,-2 now
-  s=2;
-  m=-2;
+  s=-2;
+  m=2;
   fac=myfactorial(2*m+1)/(4.0*M_PI*myfactorial(m+s)*myfactorial(m-s));
   fac=sqrt(fac);
+
+
 #pragma omp parallel for
   for (int i=0;i<nx;i++) {
-    double Pm=0.25;
+    double Pm=pow(-0.5,m);
     if (m!=s) 
       Pm*=pow(1.0+x[i],(m-s)*(0.5));
     if (m!= -s)    
       Pm *= pow(1.0-x[i],(m+s)*0.5);
     Pm *=fac;
+    //do quadrupole
+    double tmp2=Pm*sqrt((2*2+1)/(4*M_PI));
+    Ecorr[i]+=tmp2*psE[2];
+    Bcorr[i]+=tmp2*psB[2];
+
+
+    //to ell=3
     double mycslm_old=Cslm(s,m+1,m);
     double Pm1=(x[i]+s/(m+1.0))*mycslm_old*Pm;
+
+    if (i==0) {
+      printf("in second half, Pm0 and Pm1 are %12.5g %12.5g\n",Pm,Pm1);
+    }
+
+    double tmp3=Pm1*sqrt((2*3+1)/(4*M_PI));
+    Ecorr[i]+=tmp3*psE[3];
+    Bcorr[i]+=tmp3*psB[3];
+
     for (int n=m+2;n<nell+1;n++) {
       double mycslm=Cslm(s,n,m);
       double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1-Pm/mycslm_old);
       mycslm_old=mycslm;
-      double tmp=Pm*sqrt((2*n+1)/(4*M_PI));
+      double tmp=Pn*sqrt((2*n+1)/(4*M_PI));
       Ecorr[i]+=tmp*psE[n];
       Bcorr[i]+=tmp*psB[n];
+      Pm=Pm1;
+      Pm1=Pn;
+      //if (i==50)
+      //Ecorr[i]=tmp;
     }
   }
 
@@ -479,7 +528,7 @@ void s_lambda_lm (int s, int l, int m, double *x, int nx, double *Pm, double *Pm
   else
     tmp=pow(-0.5,m);
 
-  printf("tmp is %12.5f\n",tmp);
+  //printf("tmp is %12.5f\n",tmp);
   for (int i=0;i<nx;i++)
     Pm[i]=tmp;
   if (m!=s) 
@@ -499,7 +548,8 @@ void s_lambda_lm (int s, int l, int m, double *x, int nx, double *Pm, double *Pm
 
   for (int i=0;i<nx;i++)
     Pm[i]*=fac;
-  printf("Pm[0,mid,end] is now %12.5g %12.5g %12.5g\n",Pm[0],Pm[nx/2],Pm[nx-1]);
+  //printf("Pm[0,mid,end] is now %12.5g %12.5g %12.5g\n",Pm[0],Pm[nx/2],Pm[nx-1]);
+
   //printf("fac is %12.4g and Pm[0] is %12.4g\n",fac,Pm[0]);
 
   if (l==m)
@@ -511,7 +561,7 @@ void s_lambda_lm (int s, int l, int m, double *x, int nx, double *Pm, double *Pm
   for (int i=0;i<nx;i++) {
     Pm1[i]=(x[i]+s/(m+1.0))*mycslm*Pm[i];
   }
-  
+  //printf("Pm1[0,mid,end] is now %12.5g %12.5g %12.5g\n",Pm1[0],Pm1[nx/2],Pm1[nx-1]);  
   if (l==m+1) {
     for (int i=0;i<nx;i++)
       Pm[i]=Pm1[i];
