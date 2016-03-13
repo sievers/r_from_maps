@@ -18,6 +18,97 @@ fill_QU_corr_ee_old_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,
 fill_QU_corr_eb_c=mylib.fill_QU_corr_eb
 fill_QU_corr_eb_c.argtypes=[ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
 
+invert_posdef_mat_double_c=mylib.invert_posdef_mat_double
+invert_posdef_mat_double_c.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p]
+
+eig_wrapper_c=mylib.eig_wrapper
+eig_wrapper_c.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p]
+
+
+s_lambda_lm_c=mylib.s_lambda_lm
+s_lambda_lm_c.argtypes=[ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
+
+get_EB_corrs_c=mylib.get_EB_corrs
+get_EB_corrs_c.argtypes=[ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
+
+def get_EB_corrs_fast(x,psE,psB):
+    Ecorr=0*x
+    Bcorr=0*x
+    nx=x.size
+    nl=psE.size
+    get_EB_corrs_c(x.ctypes.data,nx,psE.ctypes.data,psB.ctypes.data,nl,Ecorr.ctypes.data,Bcorr.ctypes.data)
+
+    return Ecorr,Bcorr
+
+def mylen(x):
+    try:
+        ll=len(x)
+        return ll
+    except:
+        if (x is None):        
+            return 0
+    return 1
+        
+
+def s_lambda_lm(s,l,m,x):
+    Pm=x.copy()
+    Pm1=x.copy()
+    s_lambda_lm_c(s,l,m,x.ctypes.data,len(x),Pm.ctypes.data,Pm1.ctypes.data)
+    return Pm
+
+
+    
+
+def sYlm(ss,ll,mm,costheta,phi=0):
+    Pm=1.0
+    l=ll
+    m=mm
+    s=ss
+    if (l<0):
+        return 0
+    if ((numpy.abs(m)>l) or (l<numpy.abs(s))):
+        return 0
+    if (numpy.abs(mm)<numpy.abs(ss)):
+        s=mm
+        m=ss
+        if ((m+s)%2):
+            Pm*=-1
+    if (m<0):
+        s*=-1
+        m*=-1
+        if ((m+s)%2):
+            Pm *=-1
+    print 'Pm is ' + repr(Pm)
+    result=Pm*s_lambda_lm(s,l,m,costheta)
+    I=numpy.complex(0,1)
+    if (mylen(phi)==1):
+        if (phi==0):
+            return result
+        else:
+            return result*(cos(mm*phi)+result*sin(mm*phi)*I)
+        
+    else:
+        if (all(phi==0)):
+            return result
+        else:
+            return result*(cos(mm*phi)+result*sin(mm*phi)*I)
+        
+
+        
+def eig_wrapper(mat):
+    sh=mat.shape
+    eigvals=numpy.zeros([sh[0]])
+    eig_wrapper_c(mat.ctypes.data,sh[0],eigvals.ctypes.data)
+    return eigvals
+
+def invert_posdef_mat_double(mat):
+    sh=mat.shape
+    assert(sh[0]==sh[1])
+    tmp=numpy.zeros(2)
+    info=invert_posdef_mat_double_c(mat.ctypes.data,sh[0],tmp.ctypes.data)
+    logdet=tmp[0]
+    return logdet
+
 #void interpolate_covariance(double *ra, double *dec, int n, double *costheta, double *corr, int npt, double *mat)
 def fill_QUcorr_eb(corr1E,corr2E,corr1B,corr2B,alpha,gamma):
 
@@ -75,13 +166,32 @@ def spec2corr(pspec,x):
     return mycorr/(4*numpy.pi)
 
 
+def get_EB_corrs_fromdist(costh,psE,psB):
+    
+    corr1E_vec=0
+    corr1B_vec=0
+    corr2E_vec=0
+    corr2B_vec=0
+    for i in range(len(psE)):
+        l=i+2
+        fac=numpy.sqrt((2*l+1)/(4*numpy.pi))
+        tmp=fac*sYlm(2,l,-2,(costh),0*costh)
+        corr1E_vec=corr1E_vec+tmp*psE[i]
+        corr1B_vec=corr1B_vec+tmp*psB[i]
+
+
+        tmp=fac*sYlm(2,l,2,(costh),0*costh)#*(psE[i]-psB[i])
+        corr2E_vec=corr2E_vec+tmp*psE[i]
+        corr2B_vec=corr2B_vec-tmp*psB[i]
+    return corr1E_vec,corr1B_vec,corr2E_vec,corr2B_vec
+
 def get_EB_corrs(ra,dec,psE,psB):
     aa_start=time.time()
     aa=time.time()
     alpha,gamma=fill_gamma_alpha(ra,dec);
     bb=time.time();
     #print 'elapsed time to fill gamma and alpha is ' + repr(bb-aa)
-    ninterp=5000;
+    ninterp=150000
     costh=1.0*numpy.arange(ninterp)
     costh=costh-numpy.mean(costh)
     costh=costh/max(costh)
@@ -95,18 +205,21 @@ def get_EB_corrs(ra,dec,psE,psB):
     corr2B_vec=0*costh
 
     aa=time.time()
-    for i in range(len(psE)):
-        l=i+2
-        fac=numpy.sqrt((2*l+1)/(4*numpy.pi))
-        tmp=fac*harmonics.sYlm(2,l,-2,numpy.arccos(costh),0*costh)
-        corr1E_vec=corr1E_vec+tmp.real*psE[i]
-        corr1B_vec=corr1B_vec+tmp.real*psB[i]
+    if (True):
+        corr1E_vec,corr1B_vec,corr2E_vec,corr2B_vec=get_EB_corrs_fromdist(costh,psE,psB)
+    else:
+        for i in range(len(psE)):
+            l=i+2
+            fac=numpy.sqrt((2*l+1)/(4*numpy.pi))
+            #tmp=fac*harmonics.sYlm(2,l,-2,numpy.arccos(costh),0*costh)
+            tmp=fac*sYlm(2,l,-2,(costh),0*costh)
+            corr1E_vec=corr1E_vec+tmp.real*psE[i]
+            corr1B_vec=corr1B_vec+tmp.real*psB[i]
 
-        tmp=fac*harmonics.sYlm(2,l,2,numpy.arccos(costh),0*costh)#*(psE[i]-psB[i])
-        corr2E_vec=corr2E_vec+tmp.real*psE[i]
-        corr2B_vec=corr2B_vec-tmp.real*psB[i]
-        #if (psE[i]>0):
-        #    print "ell is " + repr(l)
+            #tmp=fac*harmonics.sYlm(2,l,2,numpy.arccos(costh),0*costh)#*(psE[i]-psB[i])
+            tmp=fac*sYlm(2,l,2,(costh),0*costh)#*(psE[i]-psB[i])
+            corr2E_vec=corr2E_vec+tmp.real*psE[i]
+            corr2B_vec=corr2B_vec-tmp.real*psB[i]
 
     bb=time.time()
     #print 'elapsed time is to calculate correlation is ' + repr(bb-aa)

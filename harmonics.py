@@ -27,7 +27,10 @@ def fac(n):
 
 # coefficient function
 def Cslm(s, l, m):
-    return sqrt( l*l * (4.0*l*l - 1.0) / ( (l*l - m*m) * (l*l - s*s) ) )
+   #return sqrt( l*l * (4.0*l*l - 1.0) / ( (l*l - m*m) * (l*l - s*s) ) )
+   tmp=sqrt( l*l * (4.0*l*l - 1.0) / ( (l*l - m*m) * (l*l - s*s) ) )
+   #print 'cslm  is ' + repr([tmp,s,l,m])
+   return tmp
 
 
 
@@ -36,6 +39,41 @@ def Cslm(s, l, m):
 def s_lambda_lm(s, l, m, x):
 
     Pm = pow(-0.5, m)
+
+    if (m !=  s): Pm = Pm * pow(1.0+x, (m-s)*1.0/2)
+    if (m != -s): Pm = Pm * pow(1.0-x, (m+s)*1.0/2)
+   
+   
+    #print 'Pm[0] is ' + repr(Pm[0])
+    Pm = Pm * sqrt( fac(2*m + 1) * 1.0 / ( 4.0*pi * fac(m+s) * fac(m-s) ) )
+   
+    if (l == m):
+	return Pm
+   
+    Pm1 = (x + s*1.0/(m+1) ) * Cslm(s, m+1, m) * Pm
+   
+    if (l == m+1):
+	return Pm1
+    else:
+        cs_old=Cslm(s,m+1,m)
+	for n in range (m+2, l+1):
+            #print 'n is ' + repr(n)
+            cs_new=Cslm(s,n,m)
+	    #Pn = (x + s*m * 1.0 / ( n * (n-1.0) ) ) * Cslm(s, n, m) * Pm1 - Cslm(s, n, m) * 1.0 / Cslm(s, n-1, m) * Pm
+	    Pn = (x + s*m * 1.0 / ( n * (n-1.0) ) ) *cs_new * Pm1 - cs_new * 1.0 / cs_old * Pm
+	    Pm = Pm1
+	    Pm1 = Pn
+            cs_old=cs_new
+         
+      
+	return Pn
+
+
+# recursion function
+def s_lambda_lm_old(s, l, m, x):
+
+    Pm = pow(-0.5, m)
+    print Pm
 
     if (m !=  s): Pm = Pm * pow(1.0+x, (m-s)*1.0/2)
     if (m != -s): Pm = Pm * pow(1.0-x, (m+s)*1.0/2)
@@ -76,7 +114,7 @@ def sYlm(ss, ll, mm, theta, phi):
 	s=mm
 	m=ss
 	if ((m+s) % 2):
-	    Pm  = -Pm
+           Pm  = -Pm
 
    
     if (m < 0):
@@ -88,7 +126,10 @@ def sYlm(ss, ll, mm, theta, phi):
     result = Pm * s_lambda_lm(s, l, m, cos(theta))
 
     #return complex(result * cos(mm*phi), result * sin(mm*phi))
-    I=complex(0,1)
-    return result * cos(mm*phi)+result*sin(mm*phi)*I
+    if (all(phi==0)):
+       return result
+    else:
+       I=complex(0,1)
+       return result * cos(mm*phi)+result*sin(mm*phi)*I
 
 
