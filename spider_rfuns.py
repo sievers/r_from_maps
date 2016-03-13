@@ -28,7 +28,7 @@ eig_wrapper_c.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p]
 s_lambda_lm_c=mylib.s_lambda_lm
 s_lambda_lm_c.argtypes=[ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
 
-get_EB_corrs_c=mylib.get_EB_corrs
+get_EB_corrs_c=mylib.get_EB_corrs_cached
 get_EB_corrs_c.argtypes=[ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
 
 def get_EB_corrs_fast(x,psE,psB):
