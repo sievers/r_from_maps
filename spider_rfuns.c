@@ -457,10 +457,12 @@ void get_EB_corrs(double *x, int nx, double *psE, double *psB, int nell, double 
 
 
 /*--------------------------------------------------------------------------------*/
-void get_EB_corrs_cached(double *x, int nx, double *psE, double *psB, int nell, double *Ecorr, double *Bcorr)
+void get_EB_corrs_cached(double *x, int nx, double *psE, double *psB, int nell, double *Ecorr, double *Bcorr, double *Ecorr2, double *Bcorr2)
 {
   memset(Ecorr,0,sizeof(double)*nx);
   memset(Bcorr,0,sizeof(double)*nx);
+  memset(Ecorr2,0,sizeof(double)*nx);
+  memset(Bcorr2,0,sizeof(double)*nx);
 
   double *Pm=(double *)malloc(sizeof(double)*nx);
   double *Pm1=(double *)malloc(sizeof(double)*nx);
@@ -476,43 +478,47 @@ void get_EB_corrs_cached(double *x, int nx, double *psE, double *psB, int nell, 
   fac=sqrt(fac);
 
   
-  for (int i=0;i<nx;i++) {
-    Pm[i]=pow(-0.5,m);
-    if (m!=s) 
-      Pm[i]*=pow(1.0+x[i],(m-s)*(0.5));
-    if (m!= -s)    
-      Pm[i] *= pow(1.0-x[i],(m+s)*0.5);
-    Pm[i] *=fac;
-    double tmp2=Pm[i]*sqrt((2*2+1)/(4*M_PI));
-    Ecorr[i]+=tmp2*psE[2];
-    Bcorr[i]-=tmp2*psE[2];
-    double mycslm_old=Cslm(s,m+1,m);
-    Pm1[i]=(x[i]+s/(m+1.0))*mycslm_old*Pm[i];
-
-    double tmp3=Pm1[i]*sqrt((2*3+1)/(4*M_PI));
-    Ecorr[i]+=tmp3*psE[3];
-    Bcorr[i]-=tmp3*psB[3];    
-  }
-
-  double mycslm_old=Cslm(s,m+1,m);
-  for (int n=m+2;n<nell+1;n++) {
-    double mycslm=Cslm(s,n,m);
-    double fac=sqrt((2*n+1)/(4*M_PI));
-    double facE=fac*psE[n];
-    double facB=fac*psB[n];
+#pragma omp parallel 
+  {
+    #pragma omp for
     for (int i=0;i<nx;i++) {
-      double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1[i]-Pm[i]/mycslm_old);
-      Pm[i]=Pm1[i];
-      Pm1[i]=Pn;
-      Ecorr[i]+=Pn*facE;
-      Bcorr[i]-=Pn*facB;
+      Pm[i]=pow(-0.5,m);
+      if (m!=s) 
+	Pm[i]*=pow(1.0+x[i],(m-s)*(0.5));
+      if (m!= -s)    
+	Pm[i] *= pow(1.0-x[i],(m+s)*0.5);
+      Pm[i] *=fac;
+      double tmp2=Pm[i]*sqrt((2*2+1)/(4*M_PI));
+      Ecorr[i]+=tmp2*psE[2];
+      Bcorr[i]-=tmp2*psB[2];
+      double mycslm_old=Cslm(s,m+1,m);
+      Pm1[i]=(x[i]+s/(m+1.0))*mycslm_old*Pm[i];
+      
+      double tmp3=Pm1[i]*sqrt((2*3+1)/(4*M_PI));
+      Ecorr[i]+=tmp3*psE[3];
+      Bcorr[i]-=tmp3*psB[3];    
     }
-    mycslm_old=mycslm;
-        
+    
+    double mycslm_old=Cslm(s,m+1,m);
+    for (int n=m+2;n<nell+1;n++) {
+      double mycslm=Cslm(s,n,m);
+      double fac=sqrt((2*n+1)/(4*M_PI));
+      double facE=fac*psE[n];
+      double facB=fac*psB[n];
+#pragma omp for
+      for (int i=0;i<nx;i++) {
+	double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1[i]-Pm[i]/mycslm_old);
+	Pm[i]=Pm1[i];
+	Pm1[i]=Pn;
+	Ecorr[i]+=Pn*facE;
+	Bcorr[i]-=Pn*facB;
+      }
+      mycslm_old=mycslm;
+      
+    }
+    
   }
-  
-
-#if 0
+#if 1
   //do 2,-2 now
   s=-2;
   m=2;
@@ -520,44 +526,47 @@ void get_EB_corrs_cached(double *x, int nx, double *psE, double *psB, int nell, 
   fac=sqrt(fac);
 
 
-  
-  mycslm_old=Cslm(s,m+1,m);
-  for (int i=0;i<nx;i++) {
-    Pm[i]=pow(-0.5,m);
-    if (m!=s) 
-      Pm[i]*=pow(1.0+x[i],(m-s)*(0.5));
-    if (m!= -s)    
-      Pm[i] *= pow(1.0-x[i],(m+s)*0.5);
-    Pm[i] *=fac;
-    //do quadrupole
-    double tmp2=Pm[i]*sqrt((2*2+1)/(4*M_PI));
-    Ecorr[i]+=tmp2*psE[2];
-    Bcorr[i]+=tmp2*psB[2];    
-
-    Pm1[i]=(x[i]+s/(m+1.0))*mycslm_old*Pm[i];
-    
-    double tmp3=Pm1[i]*sqrt((2*3+1)/(4*M_PI));
-    Ecorr[i]+=tmp3*psE[3];
-    Bcorr[i]+=tmp3*psB[3];
-
-  }
-
-  mycslm_old=Cslm(s,m+1,m);
-  for (int n=m+2;n<nell+1;n++) {
-    double mycslm=Cslm(s,n,m);
-    double fac=sqrt((2*n+1)/(4*M_PI));
-    double facE=psE[n]*fac;
-    double facB=psB[n]*fac;
+#pragma omp parallel 
+  {
+    double mycslm_old=Cslm(s,m+1,m);
+#pragma omp for
     for (int i=0;i<nx;i++) {
-      double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1[i]-Pm[i]/mycslm_old);
-      Ecorr[i]+=Pn*facE;
-      Bcorr[i]+=Pn*facB;
-      Pm[i]=Pm1[i];
-      Pm1[i]=Pn;
+      Pm[i]=pow(-0.5,m);
+      if (m!=s) 
+	Pm[i]*=pow(1.0+x[i],(m-s)*(0.5));
+      if (m!= -s)    
+	Pm[i] *= pow(1.0-x[i],(m+s)*0.5);
+      Pm[i] *=fac;
+      //do quadrupole
+      double tmp2=Pm[i]*sqrt((2*2+1)/(4*M_PI));
+      Ecorr2[i]+=tmp2*psE[2];
+      Bcorr2[i]+=tmp2*psB[2];    
+      
+      Pm1[i]=(x[i]+s/(m+1.0))*mycslm_old*Pm[i];
+      
+      double tmp3=Pm1[i]*sqrt((2*3+1)/(4*M_PI));
+      Ecorr2[i]+=tmp3*psE[3];
+      Bcorr2[i]+=tmp3*psB[3];
+      
     }
-    mycslm_old=mycslm;
-  }
 
+    mycslm_old=Cslm(s,m+1,m);
+    for (int n=m+2;n<nell+1;n++) {
+      double mycslm=Cslm(s,n,m);
+      double fac=sqrt((2*n+1)/(4*M_PI));
+      double facE=psE[n]*fac;
+      double facB=psB[n]*fac;
+#pragma omp for
+      for (int i=0;i<nx;i++) {
+	double Pn=mycslm*((x[i]+s*m/(n*(n-1.0)))*Pm1[i]-Pm[i]/mycslm_old);
+	Ecorr2[i]+=Pn*facE;
+	Bcorr2[i]+=Pn*facB;
+	Pm[i]=Pm1[i];
+	Pm1[i]=Pn;
+      }
+      mycslm_old=mycslm;
+    }
+  }
 #endif
   free(Pm);
   free(Pm1);

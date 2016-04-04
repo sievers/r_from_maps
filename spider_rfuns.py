@@ -29,16 +29,18 @@ s_lambda_lm_c=mylib.s_lambda_lm
 s_lambda_lm_c.argtypes=[ctypes.c_int,ctypes.c_int,ctypes.c_int,ctypes.c_void_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_void_p]
 
 get_EB_corrs_c=mylib.get_EB_corrs_cached
-get_EB_corrs_c.argtypes=[ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p]
+get_EB_corrs_c.argtypes=[ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
 
 def get_EB_corrs_fast(x,psE,psB):
-    Ecorr=0*x
-    Bcorr=0*x
+    Ecorr1=0*x
+    Ecorr2=0*x
+    Bcorr1=0*x
+    Bcorr2=0*x
     nx=x.size
     lmax=psE.size-1
-    get_EB_corrs_c(x.ctypes.data,nx,psE.ctypes.data,psB.ctypes.data,lmax,Ecorr.ctypes.data,Bcorr.ctypes.data)
+    get_EB_corrs_c(x.ctypes.data,nx,psE.ctypes.data,psB.ctypes.data,lmax,Ecorr1.ctypes.data,Bcorr1.ctypes.data,Ecorr2.ctypes.data,Bcorr2.ctypes.data)
 
-    return Ecorr,Bcorr
+    return Ecorr1,Ecorr2,Bcorr1,Bcorr2
 
 def mylen(x):
     try:
@@ -184,7 +186,7 @@ def get_EB_corrs_fromdist(costh,psE,psB):
         tmp=fac*sYlm(2,l,2,(costh),0*costh)#*(psE[i]-psB[i])
         corr2E_vec=corr2E_vec+tmp*psE[i]
         corr2B_vec=corr2B_vec-tmp*psB[i]
-    return corr1E_vec,corr1B_vec,corr2E_vec,corr2B_vec
+    return corr1E_vec,corr2E_vec,corr1B_vec,corr2B_vec
 
 def get_EB_corrs(ra,dec,psE,psB):
     aa_start=time.time()
@@ -206,8 +208,9 @@ def get_EB_corrs(ra,dec,psE,psB):
     corr2B_vec=0*costh
 
     aa=time.time()
-    if (True):
+    if (False):
         corr1E_vec,corr1B_vec,corr2E_vec,corr2B_vec=get_EB_corrs_fromdist(costh,psE,psB)
+        #corr1E_vec,corr1B_vec,corr2E_vec,corr2B_vec=get_EB_corrs_fast(costh,psE,psB)
     else:
         for i in range(len(psE)):
             l=i+2
@@ -225,6 +228,8 @@ def get_EB_corrs(ra,dec,psE,psB):
     bb=time.time()
     #print 'elapsed time is to calculate correlation is ' + repr(bb-aa)
 
+    
+
     nn=len(ra)
 
 
@@ -238,6 +243,43 @@ def get_EB_corrs(ra,dec,psE,psB):
     corr2B=interpolate_covariance(ra,dec,(costh),corr2B_vec.real)
     bb=time.time()
     #print 'elapsed time to interpolate correlation is ' + repr(bb-aa)
+    #if (True):
+    #    return corr1E,corr2E,corr1B,corr2B
+
+    aa=time.time()
+
+    corrE,corrB=fill_QUcorr_eb(corr1E,corr2E,corr1B,corr2B,alpha,gamma)
+
+    bb=time.time()
+    #print 'elapsed time to form Q/U is ' + repr(bb-aa)
+    bb_stop=time.time()
+    print 'total elapsed time to form E/B covariances is ' + repr(bb_stop-aa_start)
+    return corrE,corrB
+
+
+
+
+def get_EB_corrs_exact(ra,dec,psE,psB):
+    aa_start=time.time()
+    aa=time.time()
+    alpha,gamma=fill_gamma_alpha(ra,dec);
+    bb=time.time();
+    #print 'elapsed time to fill gamma and alpha is ' + repr(bb-aa)
+
+    aa=time.time()
+    
+    x=numpy.sin(dec)*numpy.sin(ra)
+    y=numpy.sin(dec)*numpy.cos(ra)
+    z=numpy.cos(dec)
+    xyz=numpy.asarray([x,y,z])
+    costh=numpy.dot(xyz.transpose(),xyz)
+    corr2E,corr1E,corr2B,corr1B=get_EB_corrs_fast(costh,psE,psB)
+    bb=time.time()
+    print 'elapsed time is to calculate correlation is ' + repr(bb-aa)
+    #if (True):
+    #    return corr1E,corr2E,corr1B,corr2B
+
+    nn=len(ra)
 
 
     aa=time.time()
@@ -249,6 +291,7 @@ def get_EB_corrs(ra,dec,psE,psB):
     bb_stop=time.time()
     print 'total elapsed time to form E/B covariances is ' + repr(bb_stop-aa_start)
     return corrE,corrB
+
 
 
 
